@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+requests
+python-dotenv
+cryptography
+fpdf2
+certifi
+pydantic
+reportlab
+apscheduler
