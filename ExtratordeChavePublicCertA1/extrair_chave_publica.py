@@ -3,7 +3,7 @@ from cryptography.hazmat.primitives.serialization.pkcs12 import load_key_and_cer
 from cryptography.hazmat.backends import default_backend
 
 # Caminho para o arquivo PFX
-caminho_pfx = "C:/Users/orion.graciano/Documents/Projetos_Python/ExtratordeChavePublica/certs/Certificado_A1_2025.pfx"
+caminho_pfx = "C:/Users/Documents/Projetos/ExtratordeChavePublica/certs/Certificado_A1_2025.pfx"
 senha_pfx = b"Certificado@2025"  # b = bytes
 
 # Lê o conteúdo do arquivo PFX

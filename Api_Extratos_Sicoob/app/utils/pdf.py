@@ -23,7 +23,7 @@ class ExtratoPDF(FPDF):
          # Título centralizado (mais abaixo para evitar sobreposição)
         self.set_xy(0, 30)
         self.set_font("Arial", "B", 14)
-        self.cell(0, 10, "Extrato Bancário Sicoob - Conta:41.967-2", border=False, ln=True, align="C")
+        self.cell(0, 10, "Extrato Bancário Sicoob - Conta:00.000-,0", border=False, ln=True, align="C")
 
         self.ln(5)
         self.set_font("Arial", "B", 10)
@@ -101,7 +101,7 @@ def gerar_pdf_extrato(json_data: dict, nome_arquivo: str = "extrato.pdf"):
     pdf.cell(0, 8, f"SALDO ANTERIOR AO PERIODO: {format_brl(float(json_data['resultado']['saldoAnterior']))}", ln=True, align="R")
     pdf.cell(0, 8, f"SALDO EM CTA ULTIMO DIA DO PERIODO: {format_brl(saldo_atual)}", ln=True, align="R")
 
-    pasta_extratos = pasta_extratos = Path(r"\\10.10.100.10\Extratos-Bancarios\ExtratosSicoob\41.967-2")
+    pasta_extratos = pasta_extratos = Path(r"\\0.0.0.0\Extratos-Bancarios\ExtratosSicoob\00.000-0")
     pasta_extratos.mkdir(exist_ok=True)
     caminho_arquivo = pasta_extratos / nome_arquivo
     pdf.output(str(caminho_arquivo))

@@ -75,7 +75,7 @@ def extrato_em_pdf(
     # caminho ABSOLUTO ou relativo para salvar pasta na rede
     import os
     pasta_extratos = r"\\00.00.000.00\Extratos-Bancarios\ExtratosSicoob\00.000-0"
-    os.makedirs(pasta_extratos, exist_ok=True)  # garante que a pasta existe, so funciona se user tiver permisão
+    os.makedirs(pasta_extratos, exist_ok=True)  
 
     caminho_arquivo = os.path.join(pasta_extratos, nome_arquivo)
 

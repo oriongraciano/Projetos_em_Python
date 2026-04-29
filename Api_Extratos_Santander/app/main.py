@@ -11,16 +11,16 @@ import asyncio
 
 app = FastAPI(title="API de Extrato Santander")
 
-# Criar instância global do scheduler
+# Cria instância global do scheduler
 scheduler = BackgroundScheduler()
 
-# Função para consultar Saldo
+#Função consultar Saldo
 @app.get("/{bank_id}/balances/{balance_id}")
 async def gerar_saldo(bank_id="90400888000000", balance_id="2032.000000000000"):
     return await consultar_saldo(bank_id, balance_id)
 
 
-# Função para rodar diariamente e salvar no Extrato
+# Função do agendador, rodar diariamente e salvar no Extrato
 def gerar_extrato_diario():
     asyncio.run(_gerar_extrato_async())
 

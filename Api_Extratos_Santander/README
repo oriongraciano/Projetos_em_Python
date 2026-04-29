@@ -1,0 +1,13 @@
+Neste projeto, desenvolvi integração com APIs de saldo e extratos de bancos como Santander e Sicoob, com o objetivo de automatizar a consulta e distribuição de informações financeiras para o departamento financeiro.
+
+O processo começou pela etapa de configuração no portal de desenvolvedores dos bancos, onde foi necessário:
+• Criar uma conta na plataforma Developers de ambos
+• Estudar a documentação técnica das APIs Rest disponíveis
+• Registrar uma aplicação para geração das credenciais de acesso
+• Configurar autenticação e permissões para consumo das rotas
+A partir disso, desenvolvi uma API assíncrona interna com Python e as biblioteca FastAPI, responsável por consumir os endpoints bancários, realizando requisições para consulta de saldo e movimentações das contas.
+O banco retorna essas informações em formato JSON, que então são tratados pela aplicação para estruturar os dados de forma organizada em um layout objetivo.
+Após essa etapa, implementei um processo que:
+• Consolida os dados do extrato por dia com totalizadores por periodo
+• Gera automaticamente um PDF com layout simples e objetivo utilizando a biblioteca FPdf.
+• Salva o arquivo em diretórios específicos dentro de um servidor da rede
