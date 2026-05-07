@@ -61,14 +61,14 @@ while True:
             print(f"{cont} - {produto}")
 
         try:
-            indice = (input("Qual produto deseja cadastrar? "))
+            indice = (input("Qual produto deseja editar? "))
 
             if 0 <= indice < len(produtos):
                 produto = produtos[indice]
 
-                novo_nome = str(input(f"Digite o novo nome do ({produto['nome']}): "))
-                novo_preco = float(input(f"Digite o novo preço do ({produto['preco']}): "))
-                nova_qtd = float(input(f"Digite a nova quantidade do ({produto['quantidade']}): "))
+                novo_nome = input(f"Digite o novo nome do ({produto['nome']}): ")
+                novo_preco = input(f"Digite o novo preço do ({produto['preco']}): ")
+                nova_qtd = input(f"Digite a nova quantidade do ({produto['quantidade']}): ")
 
                 if novo_nome:
                     produto["nome"] = novo_nome
@@ -94,7 +94,7 @@ while True:
             print(f"{cont} - {produto}")
 
         try:
-            indice = (input("Qual produto deseja cadastrar? "))
+            indice = (input("Qual produto deseja deletar? "))
 
             if 0 <= indice < len(produtos):
                 removido = produtos.pop(indice)
