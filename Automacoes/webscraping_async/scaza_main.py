@@ -3,7 +3,6 @@ import aiohttp
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
-
 # Cabeçalho
 HEADERS = {
     "User-Agent": (
@@ -38,36 +37,26 @@ async def buscar():
 
             print(f"Titulo da Pagina: {pagina.title.text.strip()}")
 
-
             # Extração dos Tokens GET:
             viewstate = pagina.find("input", {"name": "__VIEWSTATE"})["value"]
-            eventvalidation = pagina.find("input", {"name": "__EVENTVALIDATION"})["value"]
-            viewstategenerator = pagina.find("input", {"name": "__VIEWSTATEGENERATOR"})["value"]
+            eventvalidation = pagina.find("input", {"name": "__EVENTVALIDATION"})[
+                "value"
+            ]
+            viewstategenerator = pagina.find("input", {"name": "__VIEWSTATEGENERATOR"})[
+                "value"
+            ]
 
-
-            #Paiload PostBack:
+            # Paiload PostBack:
             payload_postback_insc = {
-                    "__LASTFOCUS": "",
-
-                    "__EVENTTARGET": "ctl00$cphCabMenu$CtrlContribuinte$tbInscricao",
-
-                    "__EVENTARGUMENT": "",
-
-                    "__VIEWSTATE": viewstate,
-
-                    "__VIEWSTATEGENERATOR": viewstategenerator,
-
-                    "__EVENTVALIDATION": eventvalidation,
-
-                    "ctl00$CAB$ddlNavegacaoRapida": "0",
-
-                    "ctl00$cphCabMenu$CtrlContribuinte$tbInscricao": "10365299",
-
-                    "ctl00$cphCabMenu$CaptchaControl$tbCaptchaControl": "",
-
-                    "ctl00$cphCabMenu$CaptchaControl$ccCodigo": "",
-                }
-
+                "__LASTFOCUS": "",
+                "__EVENTTARGET": "ctl00$cphCabMenu$CtrlContribuinte$tbInscricao",
+                "__EVENTARGUMENT": "",
+                "__VIEWSTATE": viewstate,
+                "__VIEWSTATEGENERATOR": viewstategenerator,
+                "__EVENTVALIDATION": eventvalidation,
+                "ctl00$CAB$ddlNavegacaoRapida": "0",
+                "ctl00$cphCabMenu$CtrlContribuinte$tbInscricao": "10365299",
+            }
 
             # POST CAMPO INSCRIÇÃO:
             async with session.post(url, data=payload_postback_insc) as post2_response:
@@ -87,52 +76,47 @@ async def buscar():
                 else:
                     print("Captcha não encontrado")
 
-
                 # Baixa o Capcha na raiz:
                 async with session.get(captcha_url2) as captcha_response2:
 
-                    captcha_bytes2 = await captcha_response2.read()    
-                    
+                    captcha_bytes2 = await captcha_response2.read()
+
                     with open("captcha2.jpg", "wb") as f:
                         f.write(captcha_bytes2)
 
-                print("\nNovo captcha salvo como captcha2.jpg")   
-                
-                #Input do Captcha no terminal:
-                captcha_digitado = input("\nDigite o captcha da imagem captcha2.jpg: ").strip().upper()    
+                print("\nNovo captcha salvo como captcha2.jpg")
 
+                # Input do Captcha no terminal:
+                captcha_digitado = (
+                    input("\nDigite o captcha da imagem captcha2.jpg: ").strip().upper()
+                )
 
                 # Extração dos Tokens POST
                 viewstate2 = pagina2.find("input", {"name": "__VIEWSTATE"})["value"]
-                eventvalidation2 = pagina2.find("input", {"name": "__EVENTVALIDATION"})["value"]
-                viewstategenerator2 = pagina2.find("input", {"name": "__VIEWSTATEGENERATOR"})["value"]
-                captcha_codigo2 = pagina2.find("input", {"name": "ctl00$cphCabMenu$CaptchaControl$ccCodigo"})["value"]
+                eventvalidation2 = pagina2.find("input", {"name": "__EVENTVALIDATION"})[
+                    "value"
+                ]
+                viewstategenerator2 = pagina2.find(
+                    "input", {"name": "__VIEWSTATEGENERATOR"}
+                )["value"]
+                captcha_codigo2 = pagina2.find(
+                    "input", {"name": "ctl00$cphCabMenu$CaptchaControl$ccCodigo"}
+                )["value"]
 
-
-                # Paiload final    
+                # Paiload final
                 payload_final = {
-                "__LASTFOCUS": "",
-
-                "__EVENTTARGET": "",
-
-                "__EVENTARGUMENT": "",
-
-                "__VIEWSTATE": viewstate2,
-
-                "__VIEWSTATEGENERATOR": viewstategenerator2,
-
-                "__EVENTVALIDATION": eventvalidation2,
-
-                "ctl00$CAB$ddlNavegacaoRapida": "0",
-                
-                "ctl00$cphCabMenu$CtrlContribuinte$tbInscricao": "10365299",
-                
-                "ctl00$cphCabMenu$CaptchaControl$tbCaptchaControl": captcha_digitado,
-                
-                "ctl00$cphCabMenu$CaptchaControl$ccCodigo": captcha_codigo2,
-                
-                "ctl00$cphCabMenu$btConsultar": "Consultar",
-            }
+                    "__LASTFOCUS": "",
+                    "__EVENTTARGET": "",
+                    "__EVENTARGUMENT": "",
+                    "__VIEWSTATE": viewstate2,
+                    "__VIEWSTATEGENERATOR": viewstategenerator2,
+                    "__EVENTVALIDATION": eventvalidation2,
+                    "ctl00$CAB$ddlNavegacaoRapida": "0",
+                    "ctl00$cphCabMenu$CtrlContribuinte$tbInscricao": "10365299",
+                    "ctl00$cphCabMenu$CaptchaControl$tbCaptchaControl": captcha_digitado,
+                    "ctl00$cphCabMenu$CaptchaControl$ccCodigo": captcha_codigo2,
+                    "ctl00$cphCabMenu$btConsultar": "",
+                }
 
             # POST FORMULARIO:
             async with session.post(url, data=payload_final) as post_response:
@@ -147,7 +131,8 @@ async def buscar():
 
                 with open("resultado_final.html", "w", encoding="utf-8") as f:
                     f.write(resultado)
-                print("\nHTML salvo em resultado_final.html")    
+
+                print("\nHTML salvo em resultado_final.html")
 
 
 asyncio.run(buscar())
