@@ -39,8 +39,8 @@ async def buscar():
 
             # Extração dos Tokens GET:
             viewstate = pagina.find("input", {"name": "__VIEWSTATE"})["value"]
-            eventvalidation = pagina.find("input", {"name": "__EVENTVALIDATION"})["value"]
             viewstategenerator = pagina.find("input", {"name": "__VIEWSTATEGENERATOR"})["value"]
+            eventvalidation = pagina.find("input", {"name": "__EVENTVALIDATION"})["value"]
 
             # Paiload PostBack:
             payload_postback_insc = {
@@ -55,7 +55,6 @@ async def buscar():
                 "ctl00$cphCabMenu$CaptchaControl$tbCaptchaControl": "",
                 "ctl00$cphCabMenu$CaptchaControl$ccCodigo": "",
             }
-
 
             # POST CAMPO INSCRIÇÃO:
             async with session.post(url, data=payload_postback_insc) as post2_response:
@@ -85,7 +84,7 @@ async def buscar():
                         f.write(captcha_bytes)
 
                 print("\nCaptcha salvo como Captcha.jpg")
-                # Final baixa o Capcha na raiz:
+                # Final baixa o Capcha.
 
 
                 # Input do Captcha no terminal:
@@ -123,7 +122,7 @@ async def buscar():
                 with open("resultado_final.html", "w", encoding="utf-8") as f:
                     f.write(resultado)
 
-                print("\nHTML salvo em resultado_final.html")
+                print("\nHTML salvo resultado_final.html")
 
                 # PEGANDO INFORMAÇÕES PROPRIETARIO:
                 pagina_final = BeautifulSoup(resultado,"html.parser")
@@ -160,5 +159,36 @@ async def buscar():
                 print(f"Vencimento: {data_vencimento.text.strip()}")
 
                 print(f"Parcelas: {parcelas.text.strip()}")
+
+
+                # Extração dos Tokens Pagina Boleto:
+                viewstate_boleto = pagina_final.find("input", {"name": "__VIEWSTATE"})["value"]
+                viewstategenerator_boleto = pagina_final.find("input", {"name": "__VIEWSTATEGENERATOR"})["value"]
+                eventvalidation_boleto = pagina_final.find("input", {"name": "__EVENTVALIDATION"})["value"]
+
+                payload_boleto = {
+                    "__LASTFOCUS": "",
+                    "__EVENTTARGET": "",
+                    "__EVENTARGUMENT": "",
+                    "__VIEWSTATE": viewstate_boleto,
+                    "__VIEWSTATEGENERATOR": viewstategenerator_boleto,
+                    "__EVENTVALIDATION": eventvalidation_boleto,
+                    "ctl00$CAB$ddlNavegacaoRapida": "0",
+                    "ctl00$cphCabMenu$ddlExercicio": "2026",
+                    #"ctl00$cphCabMenu$CtrlContribuinte$tbInscricao": "10365299",
+                    "ctl00$cphCabMenu$btParcelada": "Parcelas"
+                }
+
+
+            async with session.post(url, data=payload_boleto) as response_boleto:
+
+                resultado_boleto = await response_boleto.text()
+
+                print(f"Status code: {response_boleto.status}")
+
+                with open("resultado_boleto.html", "w", encoding="utf-8") as f:
+                    f.write(resultado_boleto)
+
+                print("\nHTML salvo resultado_boleto.html")
                 
 asyncio.run(buscar())
