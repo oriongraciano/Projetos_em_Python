@@ -39,12 +39,8 @@ async def buscar():
 
             # Extração dos Tokens GET:
             viewstate = pagina.find("input", {"name": "__VIEWSTATE"})["value"]
-            eventvalidation = pagina.find("input", {"name": "__EVENTVALIDATION"})[
-                "value"
-            ]
-            viewstategenerator = pagina.find("input", {"name": "__VIEWSTATEGENERATOR"})[
-                "value"
-            ]
+            eventvalidation = pagina.find("input", {"name": "__EVENTVALIDATION"})["value"]
+            viewstategenerator = pagina.find("input", {"name": "__VIEWSTATEGENERATOR"})["value"]
 
             # Paiload PostBack:
             payload_postback_insc = {
@@ -56,6 +52,8 @@ async def buscar():
                 "__EVENTVALIDATION": eventvalidation,
                 "ctl00$CAB$ddlNavegacaoRapida": "0",
                 "ctl00$cphCabMenu$CtrlContribuinte$tbInscricao": "10365299",
+                "ctl00$cphCabMenu$CaptchaControl$tbCaptchaControl": "",
+                "ctl00$cphCabMenu$CaptchaControl$ccCodigo": "",
             }
 
             # POST CAMPO INSCRIÇÃO:
@@ -93,15 +91,9 @@ async def buscar():
 
                 # Extração dos Tokens POST
                 viewstate2 = pagina2.find("input", {"name": "__VIEWSTATE"})["value"]
-                eventvalidation2 = pagina2.find("input", {"name": "__EVENTVALIDATION"})[
-                    "value"
-                ]
-                viewstategenerator2 = pagina2.find(
-                    "input", {"name": "__VIEWSTATEGENERATOR"}
-                )["value"]
-                captcha_codigo2 = pagina2.find(
-                    "input", {"name": "ctl00$cphCabMenu$CaptchaControl$ccCodigo"}
-                )["value"]
+                eventvalidation2 = pagina2.find("input", {"name": "__EVENTVALIDATION"})["value"]
+                viewstategenerator2 = pagina2.find("input", {"name": "__VIEWSTATEGENERATOR"})["value"]
+                # captcha_codigo2 = pagina2.find("input", {"name": "ctl00$cphCabMenu$CaptchaControl$ccCodigo"})["value"]
 
                 # Paiload final
                 payload_final = {
@@ -113,9 +105,9 @@ async def buscar():
                     "__EVENTVALIDATION": eventvalidation2,
                     "ctl00$CAB$ddlNavegacaoRapida": "0",
                     "ctl00$cphCabMenu$CtrlContribuinte$tbInscricao": "10365299",
-                    "ctl00$cphCabMenu$CaptchaControl$tbCaptchaControl": captcha_digitado,
-                    "ctl00$cphCabMenu$CaptchaControl$ccCodigo": captcha_codigo2,
-                    "ctl00$cphCabMenu$btConsultar": "",
+                    "ctl00$cphCabMenu$CaptchaControl$tbCaptchaControl": "",
+                    "ctl00$cphCabMenu$CaptchaControl$ccCodigo": captcha_digitado,
+                    "ctl00$cphCabMenu$btConsultar": "Consultar",
                 }
 
             # POST FORMULARIO:
