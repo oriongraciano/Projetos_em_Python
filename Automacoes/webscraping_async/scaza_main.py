@@ -56,6 +56,7 @@ async def buscar():
                 "ctl00$cphCabMenu$CaptchaControl$ccCodigo": "",
             }
 
+
             # POST CAMPO INSCRIÇÃO:
             async with session.post(url, data=payload_postback_insc) as post2_response:
 
@@ -63,37 +64,39 @@ async def buscar():
 
                 pagina2 = BeautifulSoup(resultado2, "html.parser")
 
-                captcha_img2 = pagina2.find(
+
+                # Inicio baixa o Capcha na raiz:
+                captcha_img = pagina2.find(
                     "img", src=lambda x: x and "CaptchaImage.aspx" in x
                 )
 
-                if captcha_img2:
-                    captcha_src2 = captcha_img2.get("src")
-                    captcha_url2 = urljoin(url, captcha_src2)
-                    print(captcha_src2)
+                if captcha_img:
+                    captcha_src = captcha_img.get("src")
+                    captcha_url = urljoin(url, captcha_src)
+                    print(captcha_src)
                 else:
                     print("Captcha não encontrado")
+                
+                async with session.get(captcha_url) as captcha_response2:
 
-                # Baixa o Capcha na raiz:
-                async with session.get(captcha_url2) as captcha_response2:
+                    captcha_bytes = await captcha_response2.read()
 
-                    captcha_bytes2 = await captcha_response2.read()
+                    with open("Captcha.jpg", "wb") as f:
+                        f.write(captcha_bytes)
 
-                    with open("captcha2.jpg", "wb") as f:
-                        f.write(captcha_bytes2)
+                print("\nCaptcha salvo como Captcha.jpg")
+                # Final baixa o Capcha na raiz:
 
-                print("\nNovo captcha salvo como captcha2.jpg")
 
                 # Input do Captcha no terminal:
                 captcha_digitado = (
-                    input("\nDigite o captcha da imagem captcha2.jpg: ").strip().upper()
+                    input("\nDigite o captcha da imagem Captcha.jpg: ").strip().upper()
                 )
 
                 # Extração dos Tokens POST
                 viewstate2 = pagina2.find("input", {"name": "__VIEWSTATE"})["value"]
                 eventvalidation2 = pagina2.find("input", {"name": "__EVENTVALIDATION"})["value"]
                 viewstategenerator2 = pagina2.find("input", {"name": "__VIEWSTATEGENERATOR"})["value"]
-                # captcha_codigo2 = pagina2.find("input", {"name": "ctl00$cphCabMenu$CaptchaControl$ccCodigo"})["value"]
 
                 # Paiload final
                 payload_final = {
@@ -117,14 +120,45 @@ async def buscar():
 
                 print(f"Status code: {post_response.status}")
 
-                print(post_response.url)
-
-                print(post_response.history)
-
                 with open("resultado_final.html", "w", encoding="utf-8") as f:
                     f.write(resultado)
 
                 print("\nHTML salvo em resultado_final.html")
 
+                # PEGANDO INFORMAÇÕES PROPRIETARIO:
+                pagina_final = BeautifulSoup(resultado,"html.parser")
 
+                nome_proprietario = pagina_final.find(
+                    "span", {"id": "ctl00_cphCabMenu_lbNome"},
+                    )    
+                inscricao = pagina_final.find(
+                    "span", {"id": "ctl00_cphCabMenu_lbInscricao"},
+                    )
+                numero_guia = pagina_final.find(
+                    "span", {"id": "ctl00_cphCabMenu_lbGuia"},
+                    )
+                valor = pagina_final.find(
+                    "span", {"id": "ctl00_cphCabMenu_lbValorCobranca"},
+                    )
+                data_vencimento = pagina_final.find(
+                    "span", {"id": "ctl00_cphCabMenu_lbVencimento"},
+                    )
+                parcelas = pagina_final.find(
+                    "span", {"id": "ctl00_cphCabMenu_lbParcelas"}
+                )
+
+                print("\n===== DADOS IPTU =====\n")
+
+                print(f"Nome: {nome_proprietario.text.strip()}")
+
+                print(f"Inscrição: {inscricao.text.strip()}")
+
+                print(f"Guia: {numero_guia.text.strip()}")
+
+                print(f"Valor: {valor.text.strip()}")
+
+                print(f"Vencimento: {data_vencimento.text.strip()}")
+
+                print(f"Parcelas: {parcelas.text.strip()}")
+                
 asyncio.run(buscar())
