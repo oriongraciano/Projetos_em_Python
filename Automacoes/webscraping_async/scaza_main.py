@@ -184,7 +184,13 @@ async def buscar():
 
                 resultado_boleto = await response_boleto.text()
 
+                pagina_boletos = BeautifulSoup(
+                    response_boleto, "html.parser"
+                )
+
                 print(f"Status code: {response_boleto.status}")
+
+                print(pagina_boletos.text)
 
                 with open("resultado_boleto.html", "w", encoding="utf-8") as f:
                     f.write(resultado_boleto)
