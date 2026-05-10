@@ -39,12 +39,8 @@ async def buscar():
 
             # Extração dos Tokens GET:
             viewstate = pagina.find("input", {"name": "__VIEWSTATE"})["value"]
-            eventvalidation = pagina.find("input", {"name": "__EVENTVALIDATION"})[
-                "value"
-            ]
-            viewstategenerator = pagina.find("input", {"name": "__VIEWSTATEGENERATOR"})[
-                "value"
-            ]
+            viewstategenerator = pagina.find("input", {"name": "__VIEWSTATEGENERATOR"})["value"]
+            eventvalidation = pagina.find("input", {"name": "__EVENTVALIDATION"})["value"]
 
             # Paiload PostBack:
             payload_postback_insc = {
@@ -56,6 +52,8 @@ async def buscar():
                 "__EVENTVALIDATION": eventvalidation,
                 "ctl00$CAB$ddlNavegacaoRapida": "0",
                 "ctl00$cphCabMenu$CtrlContribuinte$tbInscricao": "10365299",
+                "ctl00$cphCabMenu$CaptchaControl$tbCaptchaControl": "",
+                "ctl00$cphCabMenu$CaptchaControl$ccCodigo": "",
             }
 
             # POST CAMPO INSCRIÇÃO:
@@ -63,48 +61,41 @@ async def buscar():
 
                 resultado2 = await post2_response.text()
 
-                with open("resultado_postback.html", "w", encoding="utf-8") as f:
-                    f.write(resultado2)
-
                 pagina2 = BeautifulSoup(resultado2, "html.parser")
 
-                captcha_img2 = pagina2.find(
+
+                # Inicio baixa o Capcha na raiz:
+                captcha_img = pagina2.find(
                     "img", src=lambda x: x and "CaptchaImage.aspx" in x
                 )
 
-                if captcha_img2:
-                    captcha_src2 = captcha_img2.get("src")
-                    captcha_url2 = urljoin(url, captcha_src2)
-                    print(captcha_src2)
+                if captcha_img:
+                    captcha_src = captcha_img.get("src")
+                    captcha_url = urljoin(url, captcha_src)
+                    print(captcha_src)
                 else:
                     print("Captcha não encontrado")
+                
+                async with session.get(captcha_url) as captcha_response2:
 
-                # Baixa o Capcha na raiz:
-                async with session.get(captcha_url2) as captcha_response2:
+                    captcha_bytes = await captcha_response2.read()
 
-                    captcha_bytes2 = await captcha_response2.read()
+                    with open("Captcha.jpg", "wb") as f:
+                        f.write(captcha_bytes)
 
-                    with open("captcha2.jpg", "wb") as f:
-                        f.write(captcha_bytes2)
+                print("\nCaptcha salvo como Captcha.jpg")
+                # Final baixa o Capcha.
 
-                print("\nNovo captcha salvo como captcha2.jpg")
 
                 # Input do Captcha no terminal:
                 captcha_digitado = (
-                    input("\nDigite o captcha da imagem captcha2.jpg: ").strip().upper()
+                    input("\nDigite o captcha da imagem Captcha.jpg: ").strip().upper()
                 )
 
                 # Extração dos Tokens POST
                 viewstate2 = pagina2.find("input", {"name": "__VIEWSTATE"})["value"]
-                eventvalidation2 = pagina2.find("input", {"name": "__EVENTVALIDATION"})[
-                    "value"
-                ]
-                viewstategenerator2 = pagina2.find(
-                    "input", {"name": "__VIEWSTATEGENERATOR"}
-                )["value"]
-                captcha_codigo2 = pagina2.find(
-                    "input", {"name": "ctl00$cphCabMenu$CaptchaControl$ccCodigo"}
-                )["value"]
+                eventvalidation2 = pagina2.find("input", {"name": "__EVENTVALIDATION"})["value"]
+                viewstategenerator2 = pagina2.find("input", {"name": "__VIEWSTATEGENERATOR"})["value"]
 
                 # Paiload final
                 payload_final = {
@@ -116,9 +107,8 @@ async def buscar():
                     "__EVENTVALIDATION": eventvalidation2,
                     "ctl00$CAB$ddlNavegacaoRapida": "0",
                     "ctl00$cphCabMenu$CtrlContribuinte$tbInscricao": "10365299",
-                    "ctl00$cphCabMenu$CaptchaControl$tbCaptchaControl": captcha_digitado,
-                    "ctl00$cphCabMenu$CaptchaControl$ccCodigo": captcha_codigo2,
-                    "ctl00$cphCabMenu$CaptchaControl$hfCaptcha": "",
+                    "ctl00$cphCabMenu$CaptchaControl$tbCaptchaControl": "",
+                    "ctl00$cphCabMenu$CaptchaControl$ccCodigo": captcha_digitado,
                     "ctl00$cphCabMenu$btConsultar": "Consultar",
                 }
 
@@ -129,23 +119,82 @@ async def buscar():
 
                 print(f"Status code: {post_response.status}")
 
-                print(post_response.url)
-
-                print(post_response.history)
-                
-                if "não confere" in resultado.lower():
-                    print("\nCaptcha inválido")
-
-                elif "ADRIANA DA SILVA GOMES" in resultado:
-                    print("\nCONSULTA REALIZADA COM SUCESSO")
-
-                else:
-                    print("\nResposta recebida mas resultado não identificado")
-
                 with open("resultado_final.html", "w", encoding="utf-8") as f:
                     f.write(resultado)
 
-                print("\nHTML salvo em resultado_final.html")
+                print("\nHTML salvo resultado_final.html")
+
+                # PEGANDO INFORMAÇÕES PROPRIETARIO:
+                pagina_final = BeautifulSoup(resultado,"html.parser")
+
+                nome_proprietario = pagina_final.find(
+                    "span", {"id": "ctl00_cphCabMenu_lbNome"},
+                    )    
+                inscricao = pagina_final.find(
+                    "span", {"id": "ctl00_cphCabMenu_lbInscricao"},
+                    )
+                numero_guia = pagina_final.find(
+                    "span", {"id": "ctl00_cphCabMenu_lbGuia"},
+                    )
+                valor = pagina_final.find(
+                    "span", {"id": "ctl00_cphCabMenu_lbValorCobranca"},
+                    )
+                data_vencimento = pagina_final.find(
+                    "span", {"id": "ctl00_cphCabMenu_lbVencimento"},
+                    )
+                parcelas = pagina_final.find(
+                    "span", {"id": "ctl00_cphCabMenu_lbParcelas"}
+                )
+
+                print("\n===== DADOS IPTU =====\n")
+
+                print(f"Nome: {nome_proprietario.text.strip()}")
+
+                print(f"Inscrição: {inscricao.text.strip()}")
+
+                print(f"Guia: {numero_guia.text.strip()}")
+
+                print(f"Valor: {valor.text.strip()}")
+
+                print(f"Vencimento: {data_vencimento.text.strip()}")
+
+                print(f"Parcelas: {parcelas.text.strip()}")
 
 
+                # Extração dos Tokens Pagina Boleto:
+                viewstate_boleto = pagina_final.find("input", {"name": "__VIEWSTATE"})["value"]
+                viewstategenerator_boleto = pagina_final.find("input", {"name": "__VIEWSTATEGENERATOR"})["value"]
+                eventvalidation_boleto = pagina_final.find("input", {"name": "__EVENTVALIDATION"})["value"]
+
+                payload_boleto = {
+                    "__LASTFOCUS": "",
+                    "__EVENTTARGET": "",
+                    "__EVENTARGUMENT": "",
+                    "__VIEWSTATE": viewstate_boleto,
+                    "__VIEWSTATEGENERATOR": viewstategenerator_boleto,
+                    "__EVENTVALIDATION": eventvalidation_boleto,
+                    "ctl00$CAB$ddlNavegacaoRapida": "0",
+                    "ctl00$cphCabMenu$ddlExercicio": "2026",
+                    #"ctl00$cphCabMenu$CtrlContribuinte$tbInscricao": "10365299",
+                    "ctl00$cphCabMenu$btParcelada": "Parcelas"
+                }
+
+
+            async with session.post(url, data=payload_boleto) as response_boleto:
+
+                resultado_boleto = await response_boleto.text()
+
+                pagina_boletos = BeautifulSoup(
+                    response_boleto, "html.parser"
+                )
+
+                print(f"Status code: {response_boleto.status}")
+
+                print(pagina_boletos.text)
+
+                with open("resultado_boleto.html", "w", encoding="utf-8") as f:
+                    f.write(resultado_boleto)
+
+                print("\nHTML salvo resultado_boleto.html")
+                
 asyncio.run(buscar())
