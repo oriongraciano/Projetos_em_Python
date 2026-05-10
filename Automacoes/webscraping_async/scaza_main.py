@@ -63,6 +63,9 @@ async def buscar():
 
                 resultado2 = await post2_response.text()
 
+                with open("resultado_postback.html", "w", encoding="utf-8") as f:
+                    f.write(resultado2)
+
                 pagina2 = BeautifulSoup(resultado2, "html.parser")
 
                 captcha_img2 = pagina2.find(
@@ -115,7 +118,8 @@ async def buscar():
                     "ctl00$cphCabMenu$CtrlContribuinte$tbInscricao": "10365299",
                     "ctl00$cphCabMenu$CaptchaControl$tbCaptchaControl": captcha_digitado,
                     "ctl00$cphCabMenu$CaptchaControl$ccCodigo": captcha_codigo2,
-                    "ctl00$cphCabMenu$btConsultar": "",
+                    "ctl00$cphCabMenu$CaptchaControl$hfCaptcha": "",
+                    "ctl00$cphCabMenu$btConsultar": "Consultar",
                 }
 
             # POST FORMULARIO:
@@ -128,6 +132,15 @@ async def buscar():
                 print(post_response.url)
 
                 print(post_response.history)
+                
+                if "não confere" in resultado.lower():
+                    print("\nCaptcha inválido")
+
+                elif "ADRIANA DA SILVA GOMES" in resultado:
+                    print("\nCONSULTA REALIZADA COM SUCESSO")
+
+                else:
+                    print("\nResposta recebida mas resultado não identificado")
 
                 with open("resultado_final.html", "w", encoding="utf-8") as f:
                     f.write(resultado)
