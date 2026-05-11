@@ -1,9 +1,16 @@
 import asyncio
 import aiohttp
+import base64
+import re
+from PIL import Image
+from io import BytesIO
+from pathlib import Path
+import os
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
+import pytesseract
 
-# Cabeçalho
+# Cabeçalho:
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -92,12 +99,12 @@ async def buscar():
                     input("\nDigite o captcha da imagem Captcha.jpg: ").strip().upper()
                 )
 
-                # Extração dos Tokens POST
+                # Extração dos Tokens POST:
                 viewstate2 = pagina2.find("input", {"name": "__VIEWSTATE"})["value"]
                 eventvalidation2 = pagina2.find("input", {"name": "__EVENTVALIDATION"})["value"]
                 viewstategenerator2 = pagina2.find("input", {"name": "__VIEWSTATEGENERATOR"})["value"]
 
-                # Paiload final
+                # Paiload final:
                 payload_final = {
                     "__LASTFOCUS": "",
                     "__EVENTTARGET": "",
@@ -111,6 +118,7 @@ async def buscar():
                     "ctl00$cphCabMenu$CaptchaControl$ccCodigo": captcha_digitado,
                     "ctl00$cphCabMenu$btConsultar": "Consultar",
                 }
+
 
             # POST FORMULARIO:
             async with session.post(url, data=payload_final) as post_response:
@@ -166,6 +174,7 @@ async def buscar():
                 viewstategenerator_boleto = pagina_final.find("input", {"name": "__VIEWSTATEGENERATOR"})["value"]
                 eventvalidation_boleto = pagina_final.find("input", {"name": "__EVENTVALIDATION"})["value"]
 
+                #Payload Pagina Boleto:
                 payload_boleto = {
                     "__LASTFOCUS": "",
                     "__EVENTTARGET": "",
@@ -175,26 +184,56 @@ async def buscar():
                     "__EVENTVALIDATION": eventvalidation_boleto,
                     "ctl00$CAB$ddlNavegacaoRapida": "0",
                     "ctl00$cphCabMenu$ddlExercicio": "2026",
-                    #"ctl00$cphCabMenu$CtrlContribuinte$tbInscricao": "10365299",
                     "ctl00$cphCabMenu$btParcelada": "Parcelas"
                 }
 
-
+            # Post Pagina Boleto:
             async with session.post(url, data=payload_boleto) as response_boleto:
 
                 resultado_boleto = await response_boleto.text()
-
-                pagina_boletos = BeautifulSoup(
-                    response_boleto, "html.parser"
-                )
-
+                
                 print(f"Status code: {response_boleto.status}")
 
-                print(pagina_boletos.text)
+                pagina_boletos = BeautifulSoup(
+                    resultado_boleto, "html.parser"
+                )
 
-                with open("resultado_boleto.html", "w", encoding="utf-8") as f:
+                with open("resultadoPg_boleto.html", "w", encoding="utf-8") as f:
                     f.write(resultado_boleto)
 
-                print("\nHTML salvo resultado_boleto.html")
+                print("\nHTML salvo resultadoPg_boleto.html")
+
+
+                #Baixa as Guias boleto e salva na pasta BoletosTemp:
+                imagens_guias = pagina_boletos.find_all(
+                    "img", 
+                    id=re.compile(r".*imgGuia$") 
+                )
+
+                print(f"\nTotal de guias encontradas: {len(imagens_guias)}")
+
+                for cont, img in enumerate(imagens_guias, start=1):
+
+                    src = img.get("src", "")
+
+                    if "base64," in src:
+                        header, base64_data = src.split("base64,", 1)
+
+                        imagem_bytes = base64.b64decode(base64_data)
+
+                        imagem = Image.open(BytesIO(imagem_bytes))
+
+                        base_dir = Path(__file__).resolve().parent
+                        pasta_local = base_dir / "BoletosTemp"
+                        os.makedirs(pasta_local, exist_ok=True)
+                        nome_arquivo = f"Boleto_{cont}.png"
+                        caminho_arquivos = pasta_local / nome_arquivo
+                        imagem.save(caminho_arquivos, "PNG")
+
+                        print(f"Guia salva: {nome_arquivo}")
+
+                    else:
+                        print("Imagem {cont} Invalida! Ou não esta em base64!")    
                 
+
 asyncio.run(buscar())
