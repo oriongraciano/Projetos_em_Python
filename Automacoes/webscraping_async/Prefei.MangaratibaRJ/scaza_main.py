@@ -1,3 +1,5 @@
+from shared_code.driver_response import DataResponse
+from aiohttp import compression_utils
 import asyncio
 import aiohttp
 import base64
@@ -9,17 +11,18 @@ from urllib.parse import urljoin
 import os
 import io
 from bs4 import BeautifulSoup
-from shared_code import capsolver
+from shared_code.solver_captcha.base_solver import BaseCaptchaSolver
+from shared_code.driver_response import *
+from shared_code import formatter
 from PIL import Image, ImageEnhance
 import pytesseract
 import fitz
 
 
-TESSERACT_CMD  = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+TESSERACT_CMD = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 TEMP_DEBUG_DIR = r"debug_ocr"
-BOLETOS_DIR    = "BoletosTemp"
-OCR_LANG       = "por+eng"
-OCR_CONFIG     = "--psm 6"
+OCR_LANG = "por+eng"
+OCR_CONFIG = "--psm 6"
 
 ESCALA = 3
 
@@ -69,15 +72,13 @@ def salvar_html(nome_arquivo, conteudo):
 def extrair_tokens(pagina):
 
     return {
-        "__VIEWSTATE": pagina.find(
-            "input", {"name": "__VIEWSTATE"}
-        )["value"],
-        "__VIEWSTATEGENERATOR": pagina.find(
-            "input", {"name": "__VIEWSTATEGENERATOR"}
-        )["value"],
-        "__EVENTVALIDATION": pagina.find(
-            "input", {"name": "__EVENTVALIDATION"}
-        )["value"],
+        "__VIEWSTATE": pagina.find("input", {"name": "__VIEWSTATE"})["value"],
+        "__VIEWSTATEGENERATOR": pagina.find("input", {"name": "__VIEWSTATEGENERATOR"})[
+            "value"
+        ],
+        "__EVENTVALIDATION": pagina.find("input", {"name": "__EVENTVALIDATION"})[
+            "value"
+        ],
     }
 
 
@@ -91,44 +92,27 @@ def extrair_texto(soup, tag_id):
     return elemento.text.strip()
 
 
-async def request_with_retry(
-    session,
-    method,
-    url,
-    retries=3,
-    delay=2,
-    **kwargs
-):
+async def request_with_retry(session, method, url, retries=3, delay=2, **kwargs):
 
     for tentativa in range(1, retries + 1):
 
         try:
 
-            async with session.request(
-                method,
-                url,
-                **kwargs
-            ) as response:
+            async with session.request(method, url, **kwargs) as response:
 
                 response.raise_for_status()
 
-                logger.info(
-                    f"{method} {url} | Status: {response.status}"
-                )
+                logger.info(f"{method} {url} | Status: {response.status}")
 
                 return await response.text()
 
         except Exception as e:
 
-            logger.warning(
-                f"Tentativa {tentativa} falhou: {e}"
-            )
+            logger.warning(f"Tentativa {tentativa} falhou: {e}")
 
             if tentativa == retries:
 
-                logger.error(
-                    "Número máximo de tentativas atingido"
-                )
+                logger.error("Número máximo de tentativas atingido")
 
                 raise
 
@@ -137,10 +121,7 @@ async def request_with_retry(
 
 async def resolver_captcha(session, pagina):
 
-    captcha_img = pagina.find(
-        "img",
-        src=lambda x: x and "CaptchaImage.aspx" in x
-    )
+    captcha_img = pagina.find("img", src=lambda x: x and "CaptchaImage.aspx" in x)
 
     if not captcha_img:
 
@@ -158,33 +139,25 @@ async def resolver_captcha(session, pagina):
 
         captcha_bytes = await response.read()
 
-    with open("Captcha.jpg", "wb") as f:
+    return captcha_bytes
 
-        f.write(captcha_bytes)
 
-    captcha = capsolver.break_captcha(captcha_bytes)
-
-    logger.info(f"Captcha resolvido: {captcha}")
+async def get_catpcha(session, url, solver_captcha: BaseCaptchaSolver):
+    async with session.get(url) as captcha:
+        logging.info("resolvendo captcha")
+        captcha = solver_captcha.break_captcha(await captcha.read())
+    logging.info(f"captcha resolvido: {captcha}")
 
     return captcha
 
 
 def salvar_boletos(pagina_boletos):
 
-    imagens_guias = pagina_boletos.find_all(
-        "img",
-        id=re.compile(r".*imgGuia$")
-    )
+    imagens_guias = pagina_boletos.find_all("img", id=re.compile(r".*imgGuia$"))
 
-    logger.info(
-        f"Total de guias encontradas: {len(imagens_guias)}"
-    )
+    logger.info(f"Total de guias encontradas: {len(imagens_guias)}")
 
-    base_dir = Path(__file__).resolve().parent
-
-    pasta_local = base_dir / "BoletosTemp"
-
-    os.makedirs(pasta_local, exist_ok=True)
+    boletos_pdf = []
 
     for cont, img in enumerate(imagens_guias, start=1):
 
@@ -192,9 +165,7 @@ def salvar_boletos(pagina_boletos):
 
         if "base64," not in src:
 
-            logger.warning(
-                f"Guia {cont} inválida"
-            )
+            logger.warning(f"Guia {cont} inválida")
 
             continue
 
@@ -206,203 +177,194 @@ def salvar_boletos(pagina_boletos):
 
             imagem = Image.open(BytesIO(imagem_bytes))
 
-            caminho = pasta_local / f"Boleto_{cont}.pdf"
+            imagem = imagem.convert("RGB")
 
-            imagem.convert("RGB").save(caminho, "PDF")
+            pdf_buffer = BytesIO()
 
-            logger.info(f"Guia salva: {caminho.name}")
+            imagem.save(pdf_buffer, format="PDF")
+
+            pdf_buffer.seek(0)
+
+            pdf_bytes = pdf_buffer.getvalue()
+
+            logger.info(f"Tamanho PDF guia {cont}: {len(pdf_bytes)} bytes")
+
+            boletos_pdf.append({"nome": f"boleto_{cont}.pdf", "bytes": pdf_bytes})
+
+            logger.info(f"Guia carregada memória: boleto_{cont}.pdf")
 
         except Exception as e:
 
-            logger.error(
-                f"Erro ao salvar guia {cont}: {e}"
-            )
+            logger.error(f"Erro ao salvar guia {cont}: {e}")
+
+    return boletos_pdf
 
 
+async def load_data(session, conta, scaza_logger):
 
-async def buscar():
+    parsed_data = ParsedDataList()
 
-    async with aiohttp.ClientSession(
-        headers=HEADERS,
-        timeout=TIMEOUT
-    ) as session:
+    formater = formatter.only_digits(INSCRICAO)
 
+    logger.info("Acessando página inicial")
 
-        logger.info("Acessando página inicial")
+    html = await request_with_retry(session, "GET", URL)
 
-        html = await request_with_retry(
-            session,
-            "GET",
-            URL
-        )
+    pagina = BeautifulSoup(html, "html.parser")
 
-        pagina = BeautifulSoup(html, "html.parser")
+    logger.info(f"Título da página: {pagina.title.text.strip()}")
 
-        logger.info(
-            f"Título da página: {pagina.title.text.strip()}"
-        )
+    tokens = extrair_tokens(pagina)
 
-        tokens = extrair_tokens(pagina)
+    logger.info(f"Enviando inscrição: {INSCRICAO}")
 
+    payload_postback_insc = {
+        "__LASTFOCUS": "",
+        "__EVENTTARGET": "ctl00$cphCabMenu$CtrlContribuinte$tbInscricao",
+        "__EVENTARGUMENT": "",
+        "__VIEWSTATE": tokens["__VIEWSTATE"],
+        "__VIEWSTATEGENERATOR": tokens["__VIEWSTATEGENERATOR"],
+        "__EVENTVALIDATION": tokens["__EVENTVALIDATION"],
+        "ctl00$CAB$ddlNavegacaoRapida": "0",
+        "ctl00$cphCabMenu$CtrlContribuinte$tbInscricao": INSCRICAO,
+        "ctl00$cphCabMenu$CaptchaControl$tbCaptchaControl": "",
+        "ctl00$cphCabMenu$CaptchaControl$ccCodigo": "",
+    }
 
-        logger.info(
-            f"Enviando inscrição: {INSCRICAO}"
-        )
+    resultado2 = await request_with_retry(
+        session, "POST", URL, data=payload_postback_insc
+    )
 
-        payload_postback_insc = {
-            "__LASTFOCUS": "",
-            "__EVENTTARGET": "ctl00$cphCabMenu$CtrlContribuinte$tbInscricao",
-            "__EVENTARGUMENT": "",
-            "__VIEWSTATE": tokens["__VIEWSTATE"],
-            "__VIEWSTATEGENERATOR": tokens["__VIEWSTATEGENERATOR"],
-            "__EVENTVALIDATION": tokens["__EVENTVALIDATION"],
-            "ctl00$CAB$ddlNavegacaoRapida": "0",
-            "ctl00$cphCabMenu$CtrlContribuinte$tbInscricao": INSCRICAO,
-            "ctl00$cphCabMenu$CaptchaControl$tbCaptchaControl": "",
-            "ctl00$cphCabMenu$CaptchaControl$ccCodigo": "",
-        }
+    pagina2 = BeautifulSoup(resultado2, "html.parser")
 
-        resultado2 = await request_with_retry(
-            session,
-            "POST",
-            URL,
-            data=payload_postback_insc
-        )
+    captcha = await resolver_captcha(session, pagina2)
 
-        pagina2 = BeautifulSoup(resultado2, "html.parser")
+    if not captcha:
 
+        logger.error("Falha ao resolver captcha")
 
-        captcha = await resolver_captcha(
-            session,
-            pagina2
-        )
+        return
 
-        if not captcha:
+    tokens2 = extrair_tokens(pagina2)
 
-            logger.error(
-                "Falha ao resolver captcha"
-            )
+    logger.info("Consultando débitos")
 
-            return
+    payload_final = {
+        "__LASTFOCUS": "",
+        "__EVENTTARGET": "",
+        "__EVENTARGUMENT": "",
+        "__VIEWSTATE": tokens2["__VIEWSTATE"],
+        "__VIEWSTATEGENERATOR": tokens2["__VIEWSTATEGENERATOR"],
+        "__EVENTVALIDATION": tokens2["__EVENTVALIDATION"],
+        "ctl00$CAB$ddlNavegacaoRapida": "0",
+        "ctl00$cphCabMenu$CtrlContribuinte$tbInscricao": INSCRICAO,
+        "ctl00$cphCabMenu$CaptchaControl$tbCaptchaControl": "",
+        "ctl00$cphCabMenu$CaptchaControl$ccCodigo": captcha,
+        "ctl00$cphCabMenu$btConsultar": "Consultar",
+    }
 
+    resultado = await request_with_retry(session, "POST", URL, data=payload_final)
 
-        tokens2 = extrair_tokens(pagina2)
+    salvar_html("resultado_final.html", resultado)
 
+    pagina_final = BeautifulSoup(resultado, "html.parser")
 
-        logger.info("Consultando débitos")
+    logger.info("Dados IPTU encontrados")
 
-        payload_final = {
-            "__LASTFOCUS": "",
-            "__EVENTTARGET": "",
-            "__EVENTARGUMENT": "",
-            "__VIEWSTATE": tokens2["__VIEWSTATE"],
-            "__VIEWSTATEGENERATOR": tokens2["__VIEWSTATEGENERATOR"],
-            "__EVENTVALIDATION": tokens2["__EVENTVALIDATION"],
-            "ctl00$CAB$ddlNavegacaoRapida": "0",
-            "ctl00$cphCabMenu$CtrlContribuinte$tbInscricao": INSCRICAO,
-            "ctl00$cphCabMenu$CaptchaControl$tbCaptchaControl": "",
-            "ctl00$cphCabMenu$CaptchaControl$ccCodigo": captcha,
-            "ctl00$cphCabMenu$btConsultar": "Consultar",
-        }
+    dados = {
+        "Nome": extrair_texto(pagina_final, "ctl00_cphCabMenu_lbNome"),
+        "Inscrição": extrair_texto(pagina_final, "ctl00_cphCabMenu_lbInscricao"),
+        "Guia": extrair_texto(pagina_final, "ctl00_cphCabMenu_lbGuia"),
+        "Valor": extrair_texto(pagina_final, "ctl00_cphCabMenu_lbValorCobranca"),
+        "Vencimento": extrair_texto(pagina_final, "ctl00_cphCabMenu_lbVencimento"),
+        "Parcelas": extrair_texto(pagina_final, "ctl00_cphCabMenu_lbParcelas"),
+    }
 
-        resultado = await request_with_retry(
-            session,
-            "POST",
-            URL,
-            data=payload_final
-        )
+    logger.info("===== DADOS IPTU =====")
 
-        salvar_html(
-            "resultado_final.html",
-            resultado
-        )
+    for chave, valor in dados.items():
 
+        logger.info(f"{chave}: {valor}")
 
-        pagina_final = BeautifulSoup(
-            resultado,
-            "html.parser"
-        )
+    tokens_boleto = extrair_tokens(pagina_final)
 
-        logger.info("Dados IPTU encontrados")
+    logger.info("Solicitando boletos parcelados")
 
-        dados = {
-            "Nome": extrair_texto(
-                pagina_final,
-                "ctl00_cphCabMenu_lbNome"
-            ),
-            "Inscrição": extrair_texto(
-                pagina_final,
-                "ctl00_cphCabMenu_lbInscricao"
-            ),
-            "Guia": extrair_texto(
-                pagina_final,
-                "ctl00_cphCabMenu_lbGuia"
-            ),
-            "Valor": extrair_texto(
-                pagina_final,
-                "ctl00_cphCabMenu_lbValorCobranca"
-            ),
-            "Vencimento": extrair_texto(
-                pagina_final,
-                "ctl00_cphCabMenu_lbVencimento"
-            ),
-            "Parcelas": extrair_texto(
-                pagina_final,
-                "ctl00_cphCabMenu_lbParcelas"
-            ),
-        }
+    payload_boleto = {
+        "__LASTFOCUS": "",
+        "__EVENTTARGET": "",
+        "__EVENTARGUMENT": "",
+        "__VIEWSTATE": tokens_boleto["__VIEWSTATE"],
+        "__VIEWSTATEGENERATOR": tokens_boleto["__VIEWSTATEGENERATOR"],
+        "__EVENTVALIDATION": tokens_boleto["__EVENTVALIDATION"],
+        "ctl00$CAB$ddlNavegacaoRapida": "0",
+        "ctl00$cphCabMenu$ddlExercicio": "2026",
+        "ctl00$cphCabMenu$btParcelada": "Parcelas",
+    }
 
-        logger.info("===== DADOS IPTU =====")
+    resultado_boleto = await request_with_retry(
+        session, "POST", URL, data=payload_boleto
+    )
 
-        for chave, valor in dados.items():
+    salvar_html("resultadoPg_boleto.html", resultado_boleto)
 
-            logger.info(f"{chave}: {valor}")
+    pagina_boletos = BeautifulSoup(resultado_boleto, "html.parser")
 
+    boletos = salvar_boletos(pagina_boletos)
 
-        tokens_boleto = extrair_tokens(
-            pagina_final
-        )
+    logger.info("Processo finalizado com sucesso")
 
-        logger.info(
-            "Solicitando boletos parcelados"
-        )
+    logger.info("Iniciando o Processamento OCR dos boletos")
 
-        payload_boleto = {
-            "__LASTFOCUS": "",
-            "__EVENTTARGET": "",
-            "__EVENTARGUMENT": "",
-            "__VIEWSTATE": tokens_boleto["__VIEWSTATE"],
-            "__VIEWSTATEGENERATOR": tokens_boleto["__VIEWSTATEGENERATOR"],
-            "__EVENTVALIDATION": tokens_boleto["__EVENTVALIDATION"],
-            "ctl00$CAB$ddlNavegacaoRapida": "0",
-            "ctl00$cphCabMenu$ddlExercicio": "2026",
-            "ctl00$cphCabMenu$btParcelada": "Parcelas",
-        }
+    resultado_ocr = processar_todos_boletos(boletos)
 
-        resultado_boleto = await request_with_retry(
-            session,
-            "POST",
-            URL,
-            data=payload_boleto
-        )
+    for guia in resultado_ocr:
 
-        salvar_html(
-            "resultadoPg_boleto.html",
-            resultado_boleto
-        )
+        try:
 
-        pagina_boletos = BeautifulSoup(
-            resultado_boleto,
-            "html.parser"
-        )
+            if guia["paga"]:
+                logger.info(f"Parcela {guia['parcela']} ignorada (PAGA)")
+                continue
 
-        salvar_boletos(pagina_boletos)
+            valor = guia.get("valor")
 
-        logger.info("Processo finalizado com sucesso")
+            if not valor:
 
-        logger.info("Iniciando o Processamento OCR dos boletos")
+                logger.warning(f"Parcela {guia['parcela']} ignorada: valor vazio")
 
-        processar_todos_boletos()
+                continue
+
+            valor_float = float(valor.replace(".", "").replace(",", ".").strip())
+
+            dados_parcela = {
+                "codigo": guia["parcela"],
+                "vencimento": guia["vencimento"],
+                "valor": valor_float,
+                "informacoes_adicionais": f"Parcela: {guia['parcela']}",
+            }
+
+            if guia.get("linha_digitavel"):
+                dados_parcela["barcode"] = formatter.only_digits(
+                    guia.get("linha_digitavel")
+                )
+
+            pdf_bytes = guia.get("boleto_pdf_bytes")
+
+            if pdf_bytes:
+
+                dados_parcela["link_boleto"] = base64.b64encode(pdf_bytes).decode(
+                    "utf-8"
+                )
+
+            parsed_data.add(**dados_parcela)
+
+        except Exception as e:
+
+            logger.error(f"Erro ao adicionar parcela: {e}")
+
+    logger.info(f"Total débitos encontrados: {len(parsed_data.get_list())}")
+
+    return DataResponse(debts=parsed_data.get_list())
 
 
 def preprocessar_para_ocr(imagem: Image.Image) -> Image.Image:
@@ -444,7 +406,7 @@ def detectar_inicio_guias(imagem: Image.Image) -> list[int]:
         if "Parcela" not in word or "Paga" in word:
             continue
 
-        contexto = " ".join(data["text"][max(0, i - 3):i + 4])
+        contexto = " ".join(data["text"][max(0, i - 3) : i + 4])
         if not re.search(r"Parcela\s*\d{2}", contexto):
             continue
 
@@ -474,7 +436,7 @@ def extrair_dados_boleto(texto_esq: str, texto_full: str) -> dict | None:
 
     dados = {}
 
-    # Parcela 
+    # Parcela
     # Com recorte por guia: lê "05/09" limpo
     # Residual OCR: "0509", "G5/09"
     m = re.search(r"Parcela\s+([Gg\d]{2})[/]?(\d{2})\b", texto_esq)
@@ -487,17 +449,20 @@ def extrair_dados_boleto(texto_esq: str, texto_full: str) -> dict | None:
     # Paga
     dados["paga"] = bool(re.search(r"Parcela\s+Paga\s+em", texto_esq, re.IGNORECASE))
 
-    # Vencimento 
+    # Vencimento
     # Real: "30/06/2026" | OCR residual: "3046/2026", "30N6/2026"
     m = re.search(
         r"Venc[ia]mento.{0,40}?(\d{2})\D{0,2}(\d{2})\D{0,2}(20\d{2})",
-        texto_esq, re.DOTALL
+        texto_esq,
+        re.DOTALL,
     )
     if m:
         dados["vencimento"] = f"{m.group(1)}/{m.group(2)}/{m.group(3)}"
     else:
         m2 = re.search(r"\b(\d{2})/(\d{2})/(20\d{2})\b", texto_esq)
-        dados["vencimento"] = f"{m2.group(1)}/{m2.group(2)}/{m2.group(3)}" if m2 else None
+        dados["vencimento"] = (
+            f"{m2.group(1)}/{m2.group(2)}/{m2.group(3)}" if m2 else None
+        )
 
     #  Valor
     # Prioriza após label "Valor (R$)"
@@ -506,12 +471,12 @@ def extrair_dados_boleto(texto_esq: str, texto_full: str) -> dict | None:
         m = re.search(r"\b(\d{1,4}),(\d{2})\b", texto_esq)
     dados["valor"] = f"{m.group(1)},{m.group(2)}" if m else None
 
-    #  Linha digitável — busca no recorte de largura total 
+    #  Linha digitável — busca no recorte de largura total
     # Padrão: 4 grupos numéricos com traço separados por espaço
     # ex: "81640000000-5  53182531202-2  60630971100-4  01607804052-0"
     m = re.search(
         r"(\d{8,12}-?\d[\s,]+\d{8,12}-?\d[\s,]+\d{8,12}-?\d[\s,]+\d{8,12}-?\d)",
-        texto_full
+        texto_full,
     )
     dados["linha_digitavel"] = re.sub(r"\s+", " ", m.group(1)).strip() if m else None
 
@@ -521,7 +486,7 @@ def extrair_dados_boleto(texto_esq: str, texto_full: str) -> dict | None:
     return dados
 
 
-def processar_boleto(nome_arquivo: str) -> list[dict]:
+def processar_boleto(pdf_bytes, nome_arquivo="boleto"):
     """
     Extrai imagem do PDF via fitz, detecta Y de cada guia e aplica
     dois recortes por guia:
@@ -529,25 +494,19 @@ def processar_boleto(nome_arquivo: str) -> list[dict]:
       - largura total   : linha digitável
     """
 
-    caminho = os.path.join(BOLETOS_DIR, nome_arquivo)
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
 
-    # fitz: extrai imagem embutida original do PDF
-    doc = fitz.open(caminho)
     imagens = doc[0].get_images(full=True)
 
     if not imagens:
-        print(f"  [AVISO] Nenhuma imagem embutida em {nome_arquivo}")
+        logger.warning("Nenhuma imagem encontrada")
         return []
 
-    xref   = imagens[0][0]
-    imagem = Image.open(io.BytesIO(doc.extract_image(xref)["image"]))
+    xref = imagens[0][0]
+    imagem = Image.open(io.BytesIO(doc.extract_image(xref)["image"])).convert("RGB")
 
-    W, H  = imagem.size
-    col_x = int(W * 0.35) 
-    
-    os.makedirs(TEMP_DEBUG_DIR, exist_ok=True)
-    imagem.save(os.path.join(TEMP_DEBUG_DIR, f"debug_{nome_arquivo}_guiaImagem.png"))
-
+    W, H = imagem.size
+    col_x = int(W * 0.35)
 
     # Detecta Y de início de cada guia automaticamente
     inicios_y = detectar_inicio_guias(imagem)
@@ -562,26 +521,44 @@ def processar_boleto(nome_arquivo: str) -> list[dict]:
     for i, y0 in enumerate(inicios_y):
 
         y_inicio = max(0, y0 - 30)
-        y_fim    = inicios_y[i + 1] - 30 if i + 1 < len(inicios_y) else H
+        y_fim = inicios_y[i + 1] - 30 if i + 1 < len(inicios_y) else H
 
-        # ── Recorte 1: coluna esquerda — parcela, vencimento, valor 
-        recorte_esq  = imagem.crop((0, y_inicio, col_x, y_fim))
-        proc_esq     = preprocessar_para_ocr(recorte_esq)
-        texto_esq    = pytesseract.image_to_string(proc_esq, lang=OCR_LANG, config=OCR_CONFIG)
+        # ── Recorte 1: coluna esquerda — parcela, vencimento, valor
+        recorte_esq = imagem.crop((0, y_inicio, col_x, y_fim))
+        proc_esq = preprocessar_para_ocr(recorte_esq)
+        texto_esq = pytesseract.image_to_string(
+            proc_esq, lang=OCR_LANG, config=OCR_CONFIG
+        )
 
-        # ── Recorte 2: largura total — linha digitável 
-        recorte_full = imagem.crop((int(W * 0.35), y_inicio + 145, W, y_fim ))
-        proc_full    = preprocessar_para_ocr(recorte_full)
-        texto_full   = pytesseract.image_to_string(proc_full, lang=OCR_LANG, config=OCR_CONFIG)
+        # ── Recorte 2: largura total — linha digitável
+        recorte_full = imagem.crop(
+            (int(W * 0.35), y_inicio + 145, W, min(y_inicio + 340, y_fim))
+        )
+        proc_full = preprocessar_para_ocr(recorte_full)
+        texto_full = pytesseract.image_to_string(
+            proc_full, lang=OCR_LANG, config=OCR_CONFIG
+        )
 
-        # Debug — salva ambos os recortes e textos
-        proc_esq.save(os.path.join(TEMP_DEBUG_DIR, f"debug_{nome_arquivo}_guia{i+1}_esq.png"))
-        proc_full.save(os.path.join(TEMP_DEBUG_DIR, f"debug_{nome_arquivo}_guia{i+1}_full.png"))
+        # # Debug — salva ambos os recortes e textos
+        # proc_esq.save(
+        #     os.path.join(TEMP_DEBUG_DIR, f"debug_{nome_arquivo}_guia{i+1}_esq.png")
+        # )
+        # proc_full.save(
+        #     os.path.join(TEMP_DEBUG_DIR, f"debug_{nome_arquivo}_guia{i+1}_full.png")
+        # )
 
-        with open(os.path.join(TEMP_DEBUG_DIR, f"debug_{nome_arquivo}_guia{i+1}_esq.txt"), "w", encoding="utf-8") as f:
-            f.write(texto_esq)
-        with open(os.path.join(TEMP_DEBUG_DIR, f"debug_{nome_arquivo}_guia{i+1}_full.txt"), "w", encoding="utf-8") as f:
-            f.write(texto_full)
+        # with open(
+        #     os.path.join(TEMP_DEBUG_DIR, f"debug_{nome_arquivo}_guia{i+1}_esq.txt"),
+        #     "w",
+        #     encoding="utf-8",
+        # ) as f:
+        #     f.write(texto_esq)
+        # with open(
+        #     os.path.join(TEMP_DEBUG_DIR, f"debug_{nome_arquivo}_guia{i+1}_full.txt"),
+        #     "w",
+        #     encoding="utf-8",
+        # ) as f:
+        #     f.write(texto_full)
 
         dados = extrair_dados_boleto(texto_esq, texto_full)
         if dados:
@@ -590,33 +567,37 @@ def processar_boleto(nome_arquivo: str) -> list[dict]:
     return todas_guias
 
 
-def processar_todos_boletos():
+def processar_todos_boletos(lista_boletos):
 
-    arquivos = sorted(f for f in os.listdir(BOLETOS_DIR) if f.lower().endswith(".pdf"))
+    resultado = []
 
-    if not arquivos:
-        print("Nenhum PDF encontrado em BoletosTemp/")
-        return
+    for boleto in lista_boletos:
 
-    for arquivo in arquivos:
-        print(f"\n{'='*52}")
-        print(f"  Processando: {arquivo}")
-        print(f"{'='*52}")
+        nome = boleto["nome"]
 
-        guias = processar_boleto(arquivo)
+        pdf_bytes = boleto["bytes"]
+
+        logger.info(f"\n{'='*50}")
+        logger.info(f"  Processando: {nome}")
+        logger.info(f"{'='*50}")
+
+        guias = processar_boleto(pdf_bytes, nome)
+
+        for guia in guias:
+            guia["boleto_pdf_bytes"] = pdf_bytes
 
         if not guias:
-            print("  Nenhuma guia extraída.")
+            logger.info(f"Nenhuma guia extraida")
             continue
+
+        resultado.extend(guias)
 
         for i, guia in enumerate(guias, start=1):
             status = "PAGA" if guia["paga"] else "ABERTA"
-            print(f"\n  Guia {i} [{status}]")
-            print(f"    Parcela        : {guia['parcela']}")
-            print(f"    Vencimento     : {guia['vencimento']}")
-            print(f"    Valor (R$)     : {guia['valor']}")
-            print(f"    Linha Digitável: {guia['linha_digitavel']}")
+            logger.info(f"\n  Guia {i} [{status}]")
+            logger.info(f"    Parcela        : {guia['parcela']}")
+            logger.info(f"    Vencimento     : {guia['vencimento']}")
+            logger.info(f"    Valor (R$)     : {guia['valor']}")
+            logger.info(f"    Linha Digitável: {guia['linha_digitavel']}")
 
-
-if __name__ == "__main__":
-    asyncio.run(buscar())
+    return resultado
