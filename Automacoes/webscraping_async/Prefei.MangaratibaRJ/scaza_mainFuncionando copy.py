@@ -1,4 +1,5 @@
 from shared_code.driver_response import DataResponse
+from shared_code.upload_boleto import subir_boleto_azure
 from aiohttp import compression_utils
 import asyncio
 import aiohttp
@@ -40,7 +41,7 @@ HEADERS = {
     ),
     "Accept": (
         "text/html,application/xhtml+xml,"
-        "application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+        "application/xml;q=0.9,image/avif,image/webp,/;q=0.8"
     ),
     "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
     "Connection": "keep-alive",
@@ -351,10 +352,11 @@ async def load_data(session, conta, scaza_logger):
             pdf_bytes = guia.get("boleto_pdf_bytes")
 
             if pdf_bytes:
-
-                dados_parcela["link_boleto"] = base64.b64encode(pdf_bytes).decode(
-                    "utf-8"
+                link_boleto, data_boleto = await subir_boleto_azure(
+                    conta["id"], "iptumangaratibarj", pdf_bytes
                 )
+                dados_parcela["link_boleto"] = link_boleto
+                dados_parcela["data_boleto"] = data_boleto
 
             parsed_data.add(**dados_parcela)
 
@@ -363,8 +365,11 @@ async def load_data(session, conta, scaza_logger):
             logger.error(f"Erro ao adicionar parcela: {e}")
 
     logger.info(f"Total débitos encontrados: {len(parsed_data.get_list())}")
+    print("=" * 38)
 
-    return DataResponse(debts=parsed_data.get_list())
+    return DataResponse(
+        debts=parsed_data.get_list(), receipt=DataReceipt(boletos, DataType.PDF)
+    )
 
 
 def preprocessar_para_ocr(imagem: Image.Image) -> Image.Image:
@@ -403,11 +408,18 @@ def detectar_inicio_guias(imagem: Image.Image) -> list[int]:
     inicios_y = []
 
     for i, word in enumerate(data["text"]):
-        if "Parcela" not in word or "Paga" in word:
+
+        texto_word = word.strip().lower()
+
+        if "parcela" not in texto_word:
             continue
 
-        contexto = " ".join(data["text"][max(0, i - 3) : i + 4])
-        if not re.search(r"Parcela\s*\d{2}", contexto):
+        contexto = " ".join(data["text"][max(0, i - 5) : i + 8])
+
+        contexto = contexto.replace("\n", " ")
+
+        # aceita OCR residual
+        if not re.search(r"parcela.{0,10}[\dgG]{2}", contexto, re.IGNORECASE):
             continue
 
         y_original = data["top"][i] // ESCALA
@@ -439,10 +451,11 @@ def extrair_dados_boleto(texto_esq: str, texto_full: str) -> dict | None:
     # Parcela
     # Com recorte por guia: lê "05/09" limpo
     # Residual OCR: "0509", "G5/09"
-    m = re.search(r"Parcela\s+([Gg\d]{2})[/]?(\d{2})\b", texto_esq)
+    total_parcelas_fixo = "09"
+    m = re.search(r"Parcela\s+(\d{2})[/](\d{2})", texto_esq)
     if m:
-        num = re.sub(r"[Gg]", "0", m.group(1))
-        dados["parcela"] = f"{num}/{m.group(2)}"
+        num_parcela = m.group(1)
+        dados["parcela"] = f"{num_parcela}/{total_parcelas_fixo}"
     else:
         dados["parcela"] = None
 
@@ -530,10 +543,25 @@ def processar_boleto(pdf_bytes, nome_arquivo="boleto"):
             proc_esq, lang=OCR_LANG, config=OCR_CONFIG
         )
 
+        # # ── Recorte 2: largura total — linha digitável
+        # recorte_full = imagem.crop(
+        #     (int(W * 0.30), y_inicio + 145, W, min(y_inicio + 340, y_fim))
+
         # ── Recorte 2: largura total — linha digitável
+        # Calculamos as coordenadas com travas de segurança (clamping)
+        y_linha_inicio = y_inicio + 145
+        y_linha_fim = min(y_inicio + 340, y_fim)
+
+        # Blindagem: Se o cálculo estourar ou a guia for muito curta,
+        # garantimos que o 'lower' (fim) seja sempre maior que o 'upper' (início)
+        if y_linha_inicio >= y_linha_fim:
+            # Em guias muito pequenas, pegamos uma fatia fixa de 100px a partir do topo detectado
+            y_linha_inicio = max(0, y_linha_fim - 100)
+
         recorte_full = imagem.crop(
-            (int(W * 0.35), y_inicio + 145, W, min(y_inicio + 340, y_fim))
+            (int(W * 0.30), int(y_linha_inicio), int(W), int(y_linha_fim))
         )
+
         proc_full = preprocessar_para_ocr(recorte_full)
         texto_full = pytesseract.image_to_string(
             proc_full, lang=OCR_LANG, config=OCR_CONFIG
@@ -577,9 +605,9 @@ def processar_todos_boletos(lista_boletos):
 
         pdf_bytes = boleto["bytes"]
 
-        logger.info(f"\n{'='*50}")
+        logger.info(f"\n{'='*38}")
         logger.info(f"  Processando: {nome}")
-        logger.info(f"{'='*50}")
+        logger.info(f"{'='*38}")
 
         guias = processar_boleto(pdf_bytes, nome)
 
