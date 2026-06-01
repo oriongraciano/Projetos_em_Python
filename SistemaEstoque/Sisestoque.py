@@ -61,7 +61,7 @@ while True:
             print(f"{cont} - {produto}")
 
         try:
-            indice = (input("Qual produto deseja editar? "))
+            indice = int(input("Qual produto deseja editar? "))
 
             if 0 <= indice < len(produtos):
                 produto = produtos[indice]
@@ -76,9 +76,10 @@ while True:
                     produto["preco"] = novo_preco
                 if nova_qtd:
                     produto["quantidade"] = nova_qtd
-                print("Cliente atualizado com sucesso!")
-            else:
-                print("Indice Invalido!")
+                    print("Cliente atualizado com sucesso!")
+                    
+                else:
+                    print("Indice Invalido!")
 
         except ValueError:
             print("Digite um número valido de acordo com indice selecionado.")
