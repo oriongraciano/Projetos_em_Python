@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>OG Soluções em Tecnologia</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<div class="page-wrapper">
+
+    <header class="header">
+        <img src="/static/img/Logo_OG.png" alt="Logo OG" class="logo">
+        <div>
+            <h1>OG SOLUÇÕES EM TECNOLOGIA</h1>
+            <h2>Gerador de Ordem de Serviço</h2>
+        </div>
+    </header>
+
+    <div class="content">
+
+        <!-- FORM CARD -->
+        <div class="card form-card">
+            <h3>Nova Ordem de Serviço</h3>
+
+            <form id="osForm">
+                <label>Cliente</label>
+                <input type="text" name="cliente" required>
+
+                <label>Telefone</label>
+                <input type="text" id="telefone" name="telefone" required>
+
+                <label>Equipamento</label>
+                <input type="text" name="equipamento" required>
+
+                <label>Problema</label>
+                <textarea name="problema" required></textarea>
+
+                <label>Diagnóstico</label>
+                <textarea name="diagnostico"></textarea>
+
+                <label>Técnico</label>
+                <input type="text" name="tecnico" required>
+
+                <label>Data de Abertura</label>
+                <input type="date" name="data_abertura" required>
+
+                <label>Status</label>
+                <select name="status">
+                    <option>Aberto</option>
+                    <option>Em andamento</option>
+                    <option>Aguardando peça</option>
+                    <option>Concluído</option>
+                    <option>Entregue</option>
+                    <option>Cancelado</option>
+                </select>
+
+                <label>Valor</label>
+                <input type="text" id="valor" name="valor" required>
+
+                <button type="submit">Criar Ordem de Serviço</button>
+            </form>
+        </div>
+
+        <!-- GRID CARD -->
+        <div class="card grid-card">
+            <div class="grid-header">
+                <h3>Ordens de Serviço</h3>
+                <button onclick="carregarOS()">Atualizar</button>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nº OS</th>
+                        <th>Cliente</th>
+                        <th>Data</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="osGrid"></tbody>
+            </table>
+        </div>
+
+    </div>
+</div>
+
+<!-- MODAL -->
+<div id="successModal" class="modal">
+    <div class="modal-content">
+        <h2>OS criada com sucesso!</h2>
+        <p id="modalMessage"></p>
+
+        <button onclick="fecharModal()">Fechar</button>
+        <button id="pdfButton">Baixar PDF</button>
+    </div>
+</div>
+
+<script>
+const telefoneInput = document.getElementById("telefone");
+const valorInput = document.getElementById("valor");
+
+telefoneInput.addEventListener("input", function () {
+    let value = this.value.replace(/\D/g, '');
+    value = value.replace(/^(\d{2})(\d)/g, '($1) $2');
+    value = value.replace(/(\d{5})(\d)/, '$1-$2');
+    this.value = value;
+});
+
+valorInput.addEventListener("input", function () {
+    let value = this.value.replace(/\D/g, '');
+    value = (value / 100).toFixed(2) + '';
+    value = value.replace(".", ",");
+    value = value.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    this.value = "R$ " + value;
+});
+
+document.getElementById("osForm").addEventListener("submit", async function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+
+    const valorNumerico = formData.get("valor")
+        .replace("R$", "")
+        .replace(/\./g, "")
+        .replace(",", ".")
+        .trim();
+
+    const data = {
+        cliente: formData.get("cliente"),
+        telefone: formData.get("telefone"),
+        equipamento: formData.get("equipamento"),
+        problema: formData.get("problema"),
+        diagnostico: formData.get("diagnostico"),
+        tecnico: formData.get("tecnico"),
+        data_abertura: formData.get("data_abertura"),
+        status: formData.get("status"),
+        valor: parseFloat(valorNumerico)
+    };
+
+    const response = await fetch("/ordem-servico", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(data)
+    });
+
+    const result = await response.json();
+
+    document.getElementById("modalMessage").innerText =
+        `Número da OS: ${result.numero_os}`;
+
+    document.getElementById("pdfButton").onclick = function() {
+        baixarPDF(result.id);
+    };
+
+    document.getElementById("successModal").style.display = "flex";
+
+    carregarOS();
+});
+
+
+function fecharModal() {
+    document.getElementById("successModal").style.display = "none";
+}
+
+
+function baixarPDF(id) {
+    window.open(`/ordem-servico/${id}/pdf`, '_blank');
+}
+
+
+async function deletarOS(id) {
+    const confirmar = confirm("Deseja realmente excluir esta OS?");
+
+    if (!confirmar) return;
+
+    const response = await fetch(`/ordem-servico/${id}`, {
+        method: "DELETE"
+    });
+
+    if (response.ok) {
+        alert("OS deletada com sucesso!");
+        carregarOS();
+    } else {
+        alert("Erro ao deletar OS.");
+    }
+}
+
+
+async function carregarOS() {
+    const response = await fetch("/ordens-servico");
+    const ordens = await response.json();
+
+    const grid = document.getElementById("osGrid");
+    grid.innerHTML = "";
+
+    ordens.forEach(os => {
+        grid.innerHTML += `
+            <tr>
+                <td>${os.id}</td>
+                <td>${os.numero_os}</td>
+                <td>${os.cliente}</td>
+                <td>${os.data_abertura}</td>
+                <td>${os.status}</td>
+                <td>
+                    <button class="btn-action" onclick="baixarPDF(${os.id})">Ver PDF</button>
+                    <button onclick="deletarOS(${os.id})">Excluir</button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+carregarOS();
+</script>
+
+</body>
+</html>
