@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial;
+            padding: 30px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .section {
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            color: #1E3A8A;
+        }
+
+        strong {
+            display: inline-block;
+            width: 140px;
+        }
+
+        .assinaturas {
+            margin-top: 70px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .assinatura {
+            text-align: center;
+            width: 40%;
+        }
+
+        .linha {
+            border-top: 1px solid black;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>OG SOLUÇÕES EM TECNOLOGIA</h1>
+    <h2>ORDEM DE SERVIÇO {{ os.numero_os }}</h2>
+</div>
+
+<div class="section">
+    <p><strong>Cliente:</strong> {{ os.cliente }}</p>
+    <p><strong>Telefone:</strong> {{ os.telefone }}</p>
+    <p><strong>Equipamento:</strong> {{ os.equipamento }}</p>
+    <p><strong>Técnico:</strong> {{ os.tecnico }}</p>
+    <p><strong>Data:</strong> {{ os.data_abertura }}</p>
+    <p><strong>Status:</strong> {{ os.status }}</p>
+    <p><strong>Valor:</strong> R$ {{ os.valor }}</p>
+</div>
+
+<div class="section">
+    <h3>Problema</h3>
+    <p>{{ os.problema }}</p>
+</div>
+
+<div class="section">
+    <h3>Diagnóstico</h3>
+    <p>{{ os.diagnostico }}</p>
+</div>
+
+<div class="assinaturas">
+    <div class="assinatura">
+        <div class="linha"></div>
+        Técnico Responsável
+    </div>
+
+    <div class="assinatura">
+        <div class="linha"></div>
+        Cliente
+    </div>
+</div>
+
+</body>
+</html>
