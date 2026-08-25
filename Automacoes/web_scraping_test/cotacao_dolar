@@ -1,0 +1,18 @@
+import aiohttp
+import asyncio
+
+url_dolar = 'https://economia.awesomeapi.com.br/last/USD-BRL'
+
+async def cotacao_dolar():
+    async with aiohttp.ClientSession() as session:
+
+        async with session.get(url_dolar) as response:
+        
+            dolar = await response.json()
+
+            dolar_real = dolar['USDBRL']
+            dolar_real = dolar_real['bid']
+
+            print(f'A cotação do Dolar hoje é {dolar_real}')
+
+asyncio.run(cotacao_dolar())    
